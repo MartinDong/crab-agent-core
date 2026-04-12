@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from typing import Annotated, TypedDict, Literal
 from dotenv import load_dotenv
@@ -7,6 +8,10 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import add_messages
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from skills import WeatherSkill
 
 load_dotenv()
 
@@ -30,6 +35,7 @@ class SmartTaskAssistant:
             base_url=os.getenv("OPENAI_API_BASE")
         )
         
+        self.weather_skill = WeatherSkill()
         self.checkpointer = MemorySaver()
         self.graph = self._build_graph()
     
@@ -46,16 +52,18 @@ class SmartTaskAssistant:
 请按照以下格式输出你的思考（JSON格式）：
 {
     "thought": "你的思考过程",
-    "action": "下一步行动类型，可选值：search | calculate | complete | fail",
+    "action": "下一步行动类型，可选值：search | calculate | weather | complete | fail",
     "action_input": "行动的具体输入内容"
 }
 
 行动说明：
 - search: 搜索信息
-- calculate: 计算
+- calculate: 计算（格式：数学表达式，如 2+3*4）
+- weather: 查询天气（格式：城市名，如 北京）
 - complete: 任务完成，输出最终答案
 - fail: 任务失败
-"""
+
+注意：如果用户问的是天气相关问题，请直接使用 weather 行动。"""
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -115,6 +123,8 @@ class SmartTaskAssistant:
                 observation = f"[计算结果] {action_input} = {result}"
             except:
                 observation = f"[计算错误] 无法计算: {action_input}"
+        elif action == "weather":
+            observation = self.weather_skill.execute(action_input)
         elif action == "complete":
             observation = f"[完成] 任务已完成：{action_input}"
         elif action == "fail":
@@ -244,9 +254,9 @@ if __name__ == "__main__":
     print(f"\n最终答案: {result1['final_answer']}")
     
     print("\n\n" + "="*80)
-    print("[演示 2] 搜索任务：了解 LangGraph 的核心概念".center(80))
+    print("[演示 2] 天气查询：北京的天气".center(80))
     print("="*80)
-    result2 = assistant.run_task("搜索 LangGraph 的核心概念", max_iterations=5, thread_id="task_search")
+    result2 = assistant.run_task("查询北京的天气", max_iterations=5, thread_id="task_weather")
     print("\n" + "="*80)
     print("演示 2 执行完毕".center(80))
     print("="*80)
@@ -254,3 +264,15 @@ if __name__ == "__main__":
     print(f"任务状态: {result2['task_status']}")
     print(f"迭代次数: {result2['current_iteration']}/{result2['max_iterations']}")
     print(f"\n最终答案: {result2['final_answer']}")
+    
+    print("\n\n" + "="*80)
+    print("[演示 3] 搜索任务：了解 LangGraph 的核心概念".center(80))
+    print("="*80)
+    result3 = assistant.run_task("搜索 LangGraph 的核心概念", max_iterations=5, thread_id="task_search")
+    print("\n" + "="*80)
+    print("演示 3 执行完毕".center(80))
+    print("="*80)
+    print(f"\n任务描述: {result3['task_description']}")
+    print(f"任务状态: {result3['task_status']}")
+    print(f"迭代次数: {result3['current_iteration']}/{result3['max_iterations']}")
+    print(f"\n最终答案: {result3['final_answer']}")
