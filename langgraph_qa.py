@@ -9,10 +9,26 @@ from langgraph.graph.message import add_messages
 load_dotenv()
 
 class State(TypedDict):
+    """
+    状态类型定义
+    使用 TypedDict 定义图中流转的状态结构
+    add_messages 是一个 reducer 函数，用于合并消息列表
+    """
     messages: Annotated[list, add_messages]
 
 class LangGraphQA:
+    """
+    基于 LangGraph 的问答系统
+    使用状态图 (StateGraph) 实现带历史记录的多轮对话
+    """
+    
     def __init__(self, model_name=os.getenv("OPENAI_MODEL_NAME")):
+        """
+        初始化问答系统并构建状态图
+        
+        Args:
+            model_name: 使用的模型名称，从环境变量读取
+        """
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0,
@@ -23,10 +39,29 @@ class LangGraphQA:
         self.graph = self._build_graph()
     
     def _chatbot(self, state: State):
+        """
+        聊天机器人节点函数
+        接收当前状态，调用 LLM 生成回复，返回更新后的状态
+        
+        Args:
+            state: 当前状态，包含消息历史
+            
+        Returns:
+            包含新 AI 消息的状态更新
+        """
         response = self.llm.invoke(state["messages"])
         return {"messages": [response]}
     
     def _build_graph(self):
+        """
+        构建 LangGraph 状态图
+        
+        图结构:
+        START -> chatbot -> END
+        
+        Returns:
+            编译后的状态图
+        """
         graph_builder = StateGraph(State)
         graph_builder.add_node("chatbot", self._chatbot)
         graph_builder.add_edge(START, "chatbot")
@@ -34,6 +69,16 @@ class LangGraphQA:
         return graph_builder.compile()
     
     def ask(self, question: str, history: list = None) -> tuple[str, list]:
+        """
+        发送问题并获取回答，同时维护对话历史
+        
+        Args:
+            question: 用户的问题
+            history: 历史消息列表，默认为 None（空历史）
+            
+        Returns:
+            (回答文本, 更新后的历史消息列表)
+        """
         if history is None:
             history = []
         

@@ -7,7 +7,18 @@ from langchain_core.output_parsers import StrOutputParser
 load_dotenv()
 
 class LangChainQA:
+    """
+    基于 LangChain 的问答系统
+    使用链式调用 (Chain) 实现简单的问答功能
+    """
+    
     def __init__(self, model_name=os.getenv("OPENAI_MODEL_NAME")):
+        """
+        初始化问答系统
+        
+        Args:
+            model_name: 使用的模型名称，从环境变量读取
+        """
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0,
@@ -23,6 +34,15 @@ class LangChainQA:
         self.chain = self.prompt | self.llm | StrOutputParser()
     
     def ask(self, question: str) -> str:
+        """
+        发送问题并获取回答
+        
+        Args:
+            question: 用户的问题
+            
+        Returns:
+            模型的回答文本
+        """
         return self.chain.invoke({"question": question})
 
 if __name__ == "__main__":
