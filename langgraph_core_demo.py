@@ -51,6 +51,10 @@ class SmartTaskAssistant:
         state["task_status"] = "thinking"
         state["current_iteration"] += 1
         
+        print(f"\n{'─'*60}")
+        print(f"迭代 {state['current_iteration']} - 思考阶段".center(60))
+        print(f"{'─'*60}")
+        
         system_prompt = """你是一个智能任务助手。你的任务是分析用户的问题，思考如何解决，并决定下一步行动。
 
 请按照以下格式输出你的思考（JSON格式）：
@@ -79,6 +83,7 @@ class SmartTaskAssistant:
         if state["observations"]:
             messages.append(AIMessage(content=f"观察结果：{json.dumps(state['observations'], ensure_ascii=False)}"))
         
+        print("正在思考...")
         response = self.llm.invoke(messages)
         
         try:
@@ -90,6 +95,9 @@ class SmartTaskAssistant:
             thought = "无法解析思考结果"
             action = "complete"
             action_input = "抱歉，我无法完成这个任务"
+        
+        print(f"思考结果: {thought}")
+        print(f"决定行动: {action} - {action_input}")
         
         state["thought_steps"].append(thought)
         state["actions_taken"].append({
@@ -107,6 +115,11 @@ class SmartTaskAssistant:
         action = last_action["action"]
         action_input = last_action["input"]
         
+        print(f"\n{'─'*60}")
+        print(f"迭代 {state['current_iteration']} - 行动阶段".center(60))
+        print(f"{'─'*60}")
+        print(f"执行行动: {action}")
+        
         observation = ""
         
         if action == "search":
@@ -122,12 +135,18 @@ class SmartTaskAssistant:
         elif action == "fail":
             observation = f"[失败] 任务失败：{action_input}"
         
+        print(f"观察结果: {observation}")
+        
         state["observations"].append(observation)
         return state
     
     def _reflect_node(self, state: AgentState):
         """反思节点 - 评估当前进展，决定是否继续循环"""
         state["task_status"] = "reflecting"
+        
+        print(f"\n{'─'*60}")
+        print(f"迭代 {state['current_iteration']} - 反思阶段".center(60))
+        print(f"{'─'*60}")
         
         last_action = state["actions_taken"][-1]["action"]
         current_iter = state["current_iteration"]
@@ -136,12 +155,17 @@ class SmartTaskAssistant:
         if last_action == "complete":
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "completed"
+            print("✓ 任务完成！")
         elif last_action == "fail":
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "failed"
+            print("✗ 任务失败")
         elif current_iter >= max_iter:
             state["final_answer"] = f"已达到最大迭代次数 {max_iter}，任务未完成。"
             state["task_status"] = "failed"
+            print(f"⚠ 已达到最大迭代次数 {max_iter}")
+        else:
+            print("→ 继续下一轮迭代...")
         
         return state
     
@@ -227,7 +251,7 @@ if __name__ == "__main__":
     assistant = SmartTaskAssistant()
     
     print("="*60)
-    print("LangGraph 核心设计 Demo - 智能任务助手")
+    print("LangGraph 核心设计 Demo - 智能任务助手".center(60))
     print("="*60)
     print("\n这个 Demo 体现了 LangGraph 的三个核心设计：")
     print("1. 显式的状态管理 - 使用复杂的 TypedDict 结构")
@@ -237,6 +261,16 @@ if __name__ == "__main__":
     
     task = input("\n请输入你的任务（例如：计算 2+3*4，或者 搜索 LangGraph 的核心概念）: ")
     
+    print("\n" + "="*60)
+    print(f"开始执行任务: {task}".center(60))
+    print("="*60)
+    
     result = assistant.run_task(task, max_iterations=5, thread_id="task_001")
     
-    print_state_summary(result)
+    print("\n" + "="*60)
+    print("任务执行完毕".center(60))
+    print("="*60)
+    print(f"\n任务描述: {result['task_description']}")
+    print(f"任务状态: {result['task_status']}")
+    print(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}")
+    print(f"\n最终答案: {result['final_answer']}")
