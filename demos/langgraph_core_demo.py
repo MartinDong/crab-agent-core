@@ -1,3 +1,20 @@
+
+"""
+LangGraph 核心设计演示 - 智能任务助手（交互式版本）
+
+这个文件展示了 LangGraph 的三个核心设计：
+1. 显式的状态管理 - 使用复杂的 TypedDict 结构
+2. Checkpointing - 支持检查点保存和恢复
+3. 循环和条件路由 - ReAct 模式的循环执行 + 条件分支
+
+与自动演示版本的区别：
+- 交互式输入，用户可以自由提问
+- 包含 resume_from_checkpoint() 方法展示检查点恢复功能
+
+作者: Crab Agent Core Team
+日期: 2026-04-12
+"""
+
 import os
 import sys
 import json
@@ -15,10 +32,23 @@ from skills import WeatherSkill
 
 load_dotenv()
 
+
 class AgentState(TypedDict):
     """
-    显式的状态管理 - 复杂的 State 结构
-    体现 LangGraph 的第一个核心设计：集中式状态管理
+    【LangGraph 核心设计 1：显式的状态管理】
+    
+    使用 TypedDict 定义复杂的状态结构，集中管理 Agent 的所有信息。
+    
+    字段说明：
+    - messages: 消息历史记录，使用 Annotated 配合 add_messages 实现消息列表的合并
+    - task_description: 用户输入的任务描述
+    - task_status: 当前任务状态（pending/thinking/acting/reflecting/completed/failed）
+    - thought_steps: 所有思考步骤的记录
+    - actions_taken: 已执行的行动列表
+    - observations: 观察结果（行动的输出）
+    - max_iterations: 最大迭代次数限制
+    - current_iteration: 当前迭代次数
+    - final_answer: 最终答案
     """
     messages: Annotated[list, add_messages]
     task_description: str
@@ -30,17 +60,29 @@ class AgentState(TypedDict):
     current_iteration: int
     final_answer: str
 
+
 class SmartTaskAssistant:
     """
-    智能任务助手 - 完整体现 LangGraph 三个核心设计的 Demo
+    智能任务助手类 - 完整体现 LangGraph 三个核心设计
     
     设计特点：
     1. 显式的状态管理：使用 TypedDict 定义复杂 State 结构
     2. Checkpointing：使用 MemorySaver 支持检查点
     3. 循环和条件路由：ReAct 模式的循环执行 + 条件分支
+    
+    工作流程（ReAct 模式）：
+        think（思考） -&gt; act（行动） -&gt; reflect（反思）
+            ^                          ↓
+            └────────── 循环 ────────────┘
     """
     
     def __init__(self, model_name=os.getenv("OPENAI_MODEL_NAME")):
+        """
+        初始化智能任务助手
+        
+        参数：
+            model_name: 使用的 LLM 模型名称，默认从 .env 的 OPENAI_MODEL_NAME 读取
+        """
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=0.7,
@@ -49,11 +91,27 @@ class SmartTaskAssistant:
         )
         
         self.weather_skill = WeatherSkill()
+        
         self.checkpointer = MemorySaver()
+        
         self.graph = self._build_graph()
     
     def _think_node(self, state: AgentState):
-        """思考节点 - 分析任务，决定下一步行动"""
+        """
+        【思考节点】
+        分析任务，决定下一步行动。
+        
+        这个节点体现了：
+        - 使用 LLM 进行推理
+        - 读取当前状态，决定下一步
+        - 更新状态
+        
+        参数：
+            state: 当前 Agent 状态
+            
+        返回：
+            更新后的 Agent 状态
+        """
         state["task_status"] = "thinking"
         state["current_iteration"] += 1
         
@@ -117,8 +175,22 @@ class SmartTaskAssistant:
         return state
     
     def _act_node(self, state: AgentState):
-        """行动节点 - 执行具体的操作（模拟工具调用）"""
+        """
+        【行动节点】
+        执行具体的操作（模拟工具调用）。
+        
+        这个节点体现了：
+        - 工具集成（WeatherSkill）
+        - 多种行动类型支持
+        
+        参数：
+            state: 当前 Agent 状态
+            
+        返回：
+            更新后的 Agent 状态
+        """
         state["task_status"] = "acting"
+        
         last_action = state["actions_taken"][-1]
         action = last_action["action"]
         action_input = last_action["input"]
@@ -151,7 +223,16 @@ class SmartTaskAssistant:
         return state
     
     def _reflect_node(self, state: AgentState):
-        """反思节点 - 评估当前进展，决定是否继续循环"""
+        """
+        【反思节点】
+        评估当前进展，决定是否继续循环。
+        
+        参数：
+            state: 当前 Agent 状态
+            
+        返回：
+            更新后的 Agent 状态
+        """
         state["task_status"] = "reflecting"
         
         print(f"\n{'─'*60}")
@@ -170,7 +251,7 @@ class SmartTaskAssistant:
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "failed"
             print("✗ 任务失败")
-        elif current_iter >= max_iter:
+        elif current_iter &gt;= max_iter:
             state["final_answer"] = f"已达到最大迭代次数 {max_iter}，任务未完成。"
             state["task_status"] = "failed"
             print(f"⚠ 已达到最大迭代次数 {max_iter}")
@@ -179,15 +260,33 @@ class SmartTaskAssistant:
         
         return state
     
-    def _router(self, state: AgentState) -> Literal["think", "end"]:
-        """条件路由 - 根据状态决定下一步走向"""
+    def _router(self, state: AgentState) -&gt; Literal["think", "end"]:
+        """
+        【LangGraph 核心设计 3：条件路由】
+        根据当前状态决定下一步走向（继续思考或结束）。
+        
+        参数：
+            state: 当前 Agent 状态
+            
+        返回：
+            下一步节点名称："think" 或 "end"
+        """
         if state["task_status"] in ["completed", "failed"]:
             return "end"
         else:
             return "think"
     
     def _build_graph(self):
-        """构建 LangGraph 状态图"""
+        """
+        构建 LangGraph 状态图
+        
+        图形结构：
+            START -&gt; think -&gt; act -&gt; reflect
+                                    ↓
+                              (条件路由)
+                              ↙       ↘
+                           think      END
+        """
         graph_builder = StateGraph(AgentState)
         
         graph_builder.add_node("think", self._think_node)
@@ -210,7 +309,17 @@ class SmartTaskAssistant:
         return graph_builder.compile(checkpointer=self.checkpointer)
     
     def run_task(self, task_description: str, max_iterations: int = 5, thread_id: str = "default"):
-        """执行任务"""
+        """
+        执行任务
+        
+        参数：
+            task_description: 任务描述
+            max_iterations: 最大迭代次数
+            thread_id: 线程 ID（用于 Checkpointing，每个任务一个独立 ID）
+            
+        返回：
+            最终的 Agent 状态
+        """
         initial_state: AgentState = {
             "messages": [],
             "task_description": task_description,
@@ -229,16 +338,37 @@ class SmartTaskAssistant:
         return result
     
     def resume_from_checkpoint(self, thread_id: str = "default"):
-        """从检查点恢复执行"""
+        """
+        【Checkpointing 演示】
+        从检查点恢复执行。
+        
+        这个方法展示了 LangGraph 的第二个核心设计：Checkpointing。
+        可以从之前中断的地方继续执行任务。
+        
+        参数：
+            thread_id: 线程 ID，与 run_task() 中使用的一致
+            
+        返回：
+            最终的 Agent 状态（如果有检查点），否则 None
+        """
         config = {"configurable": {"thread_id": thread_id}}
+        
         state = self.graph.get_state(config)
+        
         if state.values:
             result = self.graph.invoke(None, config)
             return result
+        
         return None
 
+
 def print_state_summary(result):
-    """打印状态摘要"""
+    """
+    打印状态摘要（最终结果展示）
+    
+    参数：
+        result: 最终的 Agent 状态
+    """
     print("\n" + "="*60)
     print("状态摘要")
     print("="*60)
@@ -254,8 +384,9 @@ def print_state_summary(result):
         print(f"\n--- 迭代 {i+1} ---")
         print(f"思考: {result['thought_steps'][i]}")
         print(f"行动: {json.dumps(result['actions_taken'][i], ensure_ascii=False)}")
-        if i < len(result['observations']):
+        if i &lt; len(result['observations']):
             print(f"观察: {result['observations'][i]}")
+
 
 if __name__ == "__main__":
     assistant = SmartTaskAssistant()
@@ -284,3 +415,4 @@ if __name__ == "__main__":
     print(f"任务状态: {result['task_status']}")
     print(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}")
     print(f"\n最终答案: {result['final_answer']}")
+
