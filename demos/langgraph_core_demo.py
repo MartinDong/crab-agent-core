@@ -1,4 +1,3 @@
-
 """
 LangGraph 核心设计演示 - 智能任务助手（交互式版本）
 
@@ -71,7 +70,7 @@ class SmartTaskAssistant:
     3. 循环和条件路由：ReAct 模式的循环执行 + 条件分支
     
     工作流程（ReAct 模式）：
-        think（思考） -&gt; act（行动） -&gt; reflect（反思）
+        think（思考） -> act（行动） -> reflect（反思）
             ^                          ↓
             └────────── 循环 ────────────┘
     """
@@ -85,7 +84,7 @@ class SmartTaskAssistant:
         """
         self.llm = ChatOpenAI(
             model=model_name,
-            temperature=0.7,
+            temperature=0.0,
             api_key=os.getenv("OPENAI_API_KEY"),
             base_url=os.getenv("OPENAI_API_BASE")
         )
@@ -251,7 +250,7 @@ class SmartTaskAssistant:
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "failed"
             print("✗ 任务失败")
-        elif current_iter &gt;= max_iter:
+        elif current_iter >= max_iter:
             state["final_answer"] = f"已达到最大迭代次数 {max_iter}，任务未完成。"
             state["task_status"] = "failed"
             print(f"⚠ 已达到最大迭代次数 {max_iter}")
@@ -260,7 +259,7 @@ class SmartTaskAssistant:
         
         return state
     
-    def _router(self, state: AgentState) -&gt; Literal["think", "end"]:
+    def _router(self, state: AgentState) -> Literal["think", "end"]:
         """
         【LangGraph 核心设计 3：条件路由】
         根据当前状态决定下一步走向（继续思考或结束）。
@@ -281,7 +280,7 @@ class SmartTaskAssistant:
         构建 LangGraph 状态图
         
         图形结构：
-            START -&gt; think -&gt; act -&gt; reflect
+            START -> think -> act -> reflect
                                     ↓
                               (条件路由)
                               ↙       ↘
@@ -384,7 +383,7 @@ def print_state_summary(result):
         print(f"\n--- 迭代 {i+1} ---")
         print(f"思考: {result['thought_steps'][i]}")
         print(f"行动: {json.dumps(result['actions_taken'][i], ensure_ascii=False)}")
-        if i &lt; len(result['observations']):
+        if i < len(result['observations']):
             print(f"观察: {result['observations'][i]}")
 
 
@@ -415,4 +414,3 @@ if __name__ == "__main__":
     print(f"任务状态: {result['task_status']}")
     print(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}")
     print(f"\n最终答案: {result['final_answer']}")
-
