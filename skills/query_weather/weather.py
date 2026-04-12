@@ -196,7 +196,7 @@ class WeatherSkill:
         if weather_data.get("status") != "1":
             return f"Error: Weather query failed: {weather_data.get('info', 'Unknown error')}"
         
-        if "lives" in weather_data:
+        if "lives" in weather_data and weather_data["lives"]:
             lives = weather_data["lives"][0]
             return (
                 f"Weather in {lives['city']}\n"
@@ -207,32 +207,68 @@ class WeatherSkill:
                 f"Wind: {lives['winddirection']} wind, {lives['windpower']} level\n"
                 f"Humidity: {lives['humidity']}%"
             )
-        elif "forecasts" in weather_data:
+        elif "forecasts" in weather_data and weather_data["forecasts"]:
             forecast = weather_data["forecasts"][0]
             result = f"Forecast for {forecast['city']}\n"
             result += "====================\n"
             result += f"Report time: {forecast['reporttime']}\n\n"
             
-            for cast in forecast["casts"]:
-                result += (
-                    f"{cast['date']} (Week {cast['week']}):\n"
-                    f"  Day: {cast['dayweather']}, {cast['daytemp']} deg C, {cast['daywind']} wind {cast['daypower']} level\n"
-                    f"  Night: {cast['nightweather']}, {cast['nighttemp']} deg C, {cast['nightwind']} wind {cast['nightpower']} level\n\n"
-                )
+            if "casts" in forecast and forecast["casts"]:
+                for cast in forecast["casts"]:
+                    result += (
+                        f"{cast['date']} (Week {cast['week']}):\n"
+                        f"  Day: {cast['dayweather']}, {cast['daytemp']} deg C, {cast['daywind']} wind {cast['daypower']} level\n"
+                        f"  Night: {cast['nightweather']}, {cast['nighttemp']} deg C, {cast['nightwind']} wind {cast['nightpower']} level\n\n"
+                    )
             return result
         else:
-            return "Unknown weather data format"
+            return "Weather data is empty or in unknown format"
     
     def execute(self, city: str, extensions: str = "base"):
         """
         Unified execution interface for Agent invocation.
         
         Args:
-            city: City name
+            city: City name (may contain additional info like "明天" or "today")
             extensions: Query type ("base" or "all")
         
         Returns:
             Formatted weather information
         """
-        weather_data = self.get_weather(city, extensions)
+        import re
+        
+        original_city = city
+        
+        # 检测是否是预报查询
+        forecast_keywords = ["明天", "后天", "未来", "预报", "forecast", "tomorrow", "next", "天气"]
+        is_forecast = any(keyword in city for keyword in forecast_keywords)
+        
+        # 更好的城市名提取逻辑
+        # 先移除所有时间和描述词汇
+        for keyword in forecast_keywords:
+            city = city.replace(keyword, "")
+        
+        # 移除多余空格
+        city = city.strip()
+        
+        # 如果提取后城市名为空或太短，尝试其他方法
+        if not city or len(city) < 2:
+            # 尝试从原始输入中提取中文字符（假设城市名是中文字符）
+            chinese_chars = re.findall(r'[\u4e00-\u9fff]+', original_city)
+            if chinese_chars:
+                # 尝试组合前两个字符作为城市名
+                combined = ''.join(chinese_chars)
+                if len(combined) >= 2:
+                    city = combined[:2]
+                else:
+                    city = combined
+        
+        # 最终后备方案
+        if not city:
+            city = "北京"
+        
+        # 确定查询类型
+        final_extensions = "all" if is_forecast else extensions
+        
+        weather_data = self.get_weather(city, final_extensions)
         return self.format_weather(weather_data)

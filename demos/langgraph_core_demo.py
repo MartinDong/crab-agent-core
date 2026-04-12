@@ -28,6 +28,17 @@ from langgraph.graph.message import add_messages
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from skills import WeatherSkill
+from color_utils import (
+    Color,
+    colored,
+    print_colored,
+    print_info,
+    print_success,
+    print_warning,
+    print_error,
+    print_header,
+    print_section
+)
 
 load_dotenv()
 
@@ -114,9 +125,7 @@ class SmartTaskAssistant:
         state["task_status"] = "thinking"
         state["current_iteration"] += 1
         
-        print(f"\n{'─'*60}")
-        print(f"迭代 {state['current_iteration']} - 思考阶段".center(60))
-        print(f"{'─'*60}")
+        print_section(f"迭代 {state['current_iteration']} - 思考阶段")
         
         system_prompt = """你是一个智能任务助手。你的任务是分析用户的问题，思考如何解决，并决定下一步行动。
 
@@ -130,11 +139,15 @@ class SmartTaskAssistant:
 行动说明：
 - search: 搜索信息
 - calculate: 计算（格式：数学表达式，如 2+3*4）
-- weather: 查询天气（格式：城市名，如 北京）
+- weather: 查询天气（格式：城市名，如 "北京"。用户问"明天""后天""预报"时，也只填城市名，工具会自动处理）
 - complete: 任务完成，输出最终答案
 - fail: 任务失败
 
-注意：如果用户问的是天气相关问题，请直接使用 weather 行动。"""
+注意：
+1. 如果用户问的是天气相关问题，请直接使用 weather 行动
+2. weather 的 action_input 只填纯净的城市名即可（如"邢台"，不要包含"明天""预报"等词）
+3. 如果用户问"邢台明天天气"，action_input 应该是"邢台"，不是"邢台明天"
+4. 获得天气数据后，使用 complete 行动总结天气信息给用户"""
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -148,7 +161,7 @@ class SmartTaskAssistant:
         if state["observations"]:
             messages.append(AIMessage(content=f"观察结果：{json.dumps(state['observations'], ensure_ascii=False)}"))
         
-        print("正在思考...")
+        print_info("正在思考...")
         response = self.llm.invoke(messages)
         
         try:
@@ -161,8 +174,8 @@ class SmartTaskAssistant:
             action = "complete"
             action_input = "抱歉，我无法完成这个任务"
         
-        print(f"思考结果: {thought}")
-        print(f"决定行动: {action} - {action_input}")
+        print_colored(f"思考结果: {thought}", Color.BRIGHT_CYAN)
+        print_colored(f"决定行动: {action} - {action_input}", Color.BRIGHT_YELLOW)
         
         state["thought_steps"].append(thought)
         state["actions_taken"].append({
@@ -194,10 +207,8 @@ class SmartTaskAssistant:
         action = last_action["action"]
         action_input = last_action["input"]
         
-        print(f"\n{'─'*60}")
-        print(f"迭代 {state['current_iteration']} - 行动阶段".center(60))
-        print(f"{'─'*60}")
-        print(f"执行行动: {action}")
+        print_section(f"迭代 {state['current_iteration']} - 行动阶段")
+        print_colored(f"执行行动: {action}", Color.BRIGHT_GREEN)
         
         observation = ""
         
@@ -216,7 +227,7 @@ class SmartTaskAssistant:
         elif action == "fail":
             observation = f"[失败] 任务失败：{action_input}"
         
-        print(f"观察结果: {observation}")
+        print_colored(f"观察结果: {observation}", Color.BRIGHT_BLUE)
         
         state["observations"].append(observation)
         return state
@@ -234,9 +245,7 @@ class SmartTaskAssistant:
         """
         state["task_status"] = "reflecting"
         
-        print(f"\n{'─'*60}")
-        print(f"迭代 {state['current_iteration']} - 反思阶段".center(60))
-        print(f"{'─'*60}")
+        print_section(f"迭代 {state['current_iteration']} - 反思阶段")
         
         last_action = state["actions_taken"][-1]["action"]
         current_iter = state["current_iteration"]
@@ -245,17 +254,17 @@ class SmartTaskAssistant:
         if last_action == "complete":
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "completed"
-            print("✓ 任务完成！")
+            print_success("✓ 任务完成！")
         elif last_action == "fail":
             state["final_answer"] = state["actions_taken"][-1]["input"]
             state["task_status"] = "failed"
-            print("✗ 任务失败")
+            print_error("✗ 任务失败")
         elif current_iter >= max_iter:
             state["final_answer"] = f"已达到最大迭代次数 {max_iter}，任务未完成。"
             state["task_status"] = "failed"
-            print(f"⚠ 已达到最大迭代次数 {max_iter}")
+            print_warning(f"⚠ 已达到最大迭代次数 {max_iter}")
         else:
-            print("→ 继续下一轮迭代...")
+            print_info("→ 继续下一轮迭代...")
         
         return state
     
@@ -368,49 +377,38 @@ def print_state_summary(result):
     参数：
         result: 最终的 Agent 状态
     """
-    print("\n" + "="*60)
-    print("状态摘要")
-    print("="*60)
-    print(f"任务描述: {result['task_description']}")
-    print(f"任务状态: {result['task_status']}")
-    print(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}")
-    print(f"\n最终答案: {result['final_answer']}")
-    print("\n" + "="*60)
-    print("详细执行过程")
-    print("="*60)
+    print_header("状态摘要")
+    print_colored(f"任务描述: {result['task_description']}", Color.WHITE)
+    print_colored(f"任务状态: {result['task_status']}", Color.BRIGHT_MAGENTA)
+    print_colored(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}", Color.BRIGHT_CYAN)
+    print_colored(f"\n最终答案: {result['final_answer']}", Color.BOLD + Color.BRIGHT_GREEN)
+    print_header("详细执行过程", char="-")
     
     for i in range(len(result['thought_steps'])):
-        print(f"\n--- 迭代 {i+1} ---")
-        print(f"思考: {result['thought_steps'][i]}")
-        print(f"行动: {json.dumps(result['actions_taken'][i], ensure_ascii=False)}")
+        print_section(f"迭代 {i+1}")
+        print_colored(f"思考: {result['thought_steps'][i]}", Color.BRIGHT_CYAN)
+        print_colored(f"行动: {json.dumps(result['actions_taken'][i], ensure_ascii=False)}", Color.BRIGHT_YELLOW)
         if i < len(result['observations']):
-            print(f"观察: {result['observations'][i]}")
+            print_colored(f"观察: {result['observations'][i]}", Color.BRIGHT_BLUE)
 
 
 if __name__ == "__main__":
     assistant = SmartTaskAssistant()
     
-    print("="*60)
-    print("LangGraph 核心设计 Demo - 智能任务助手".center(60))
-    print("="*60)
-    print("\n这个 Demo 体现了 LangGraph 的三个核心设计：")
-    print("1. 显式的状态管理 - 使用复杂的 TypedDict 结构")
-    print("2. Checkpointing - 支持检查点保存和恢复")
-    print("3. 循环和条件路由 - ReAct 模式的循环执行 + 条件分支")
-    print("="*60)
+    print_header("LangGraph 核心设计 Demo - 智能任务助手")
+    print_colored("\n这个 Demo 体现了 LangGraph 的三个核心设计：", Color.WHITE)
+    print_colored("1. 显式的状态管理 - 使用复杂的 TypedDict 结构", Color.CYAN)
+    print_colored("2. Checkpointing - 支持检查点保存和恢复", Color.CYAN)
+    print_colored("3. 循环和条件路由 - ReAct 模式的循环执行 + 条件分支", Color.CYAN)
     
-    task = input("\n请输入你的任务（例如：计算 2+3*4，或者 搜索 LangGraph 的核心概念）: ")
+    task = input(colored("\n请输入你的任务（例如：计算 2+3*4，或者 搜索 LangGraph 的核心概念）: ", Color.BOLD + Color.YELLOW))
     
-    print("\n" + "="*60)
-    print(f"开始执行任务: {task}".center(60))
-    print("="*60)
+    print_header(f"开始执行任务: {task}")
     
     result = assistant.run_task(task, max_iterations=5, thread_id="task_001")
     
-    print("\n" + "="*60)
-    print("任务执行完毕".center(60))
-    print("="*60)
-    print(f"\n任务描述: {result['task_description']}")
-    print(f"任务状态: {result['task_status']}")
-    print(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}")
-    print(f"\n最终答案: {result['final_answer']}")
+    print_header("任务执行完毕")
+    print_colored(f"\n任务描述: {result['task_description']}", Color.WHITE)
+    print_colored(f"任务状态: {result['task_status']}", Color.BRIGHT_MAGENTA)
+    print_colored(f"迭代次数: {result['current_iteration']}/{result['max_iterations']}", Color.BRIGHT_CYAN)
+    print_colored(f"\n最终答案: {result['final_answer']}", Color.BOLD + Color.BRIGHT_GREEN)
