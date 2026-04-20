@@ -1,0 +1,9 @@
+{
+  "base_url": "https://qianfan.baidubce.com",
+  "max_workers": 5,
+  "api_keys": [
+    "bce-v3/AK1/SK1",
+    "bce-v3/AK2/SK2",
+    "bce-v3/AK3/SK3"
+  ]
+}
