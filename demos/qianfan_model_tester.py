@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
+import re
 import requests
 import json
 import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from dotenv import load_dotenv
@@ -14,6 +15,79 @@ load_dotenv()
 
 class QianfanModelTester:
     """百度千帆模型自动化测试工具 - 支持多API密钥和并发测试"""
+
+    @staticmethod
+    def fetch_webpage_content(url: str, timeout: int = 30) -> Optional[str]:
+        """
+        获取网页内容
+        
+        Args:
+            url: 目标网页URL
+            timeout: 请求超时时间（秒）
+        
+        Returns:
+            网页HTML内容，失败返回None
+        """
+        try:
+            print(f"正在获取网页内容: {url}")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            print(f"成功获取网页内容，长度: {len(response.text)} 字符")
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"获取网页内容失败: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"获取网页时发生未知错误: {str(e)}")
+            return None
+
+    @staticmethod
+    def extract_api_keys_from_content(content: str) -> List[str]:
+        """
+        从网页内容中提取API密钥
+        
+        Args:
+            content: 网页HTML内容
+        
+        Returns:
+            去重后的API密钥列表
+        """
+        if not content:
+            print("未提供有效的网页内容")
+            return []
+        
+        print("正在从网页内容中提取API密钥...")
+        
+        # 正则表达式匹配 bce-v3/AL 开头的API密钥
+        # 格式通常为 bce-v3/AK/SK，其中AK和SK是字母数字组合
+        pattern = r'bce-v3/AL[^"\s\'<>`]+'
+        
+        matches = re.findall(pattern, content)
+        
+        if not matches:
+            print("未找到匹配的API密钥")
+            return []
+        
+        # 去重处理
+        unique_keys: Set[str] = set()
+        for key in matches:
+            # 清理可能的尾部字符
+            cleaned_key = key.strip()
+            # 简单验证密钥格式
+            if cleaned_key.startswith("bce-v3/AL") and len(cleaned_key) > len("bce-v3/AL"):
+                unique_keys.add(cleaned_key)
+        
+        result = list(unique_keys)
+        print(f"找到 {len(matches)} 个匹配项，去重后保留 {len(result)} 个有效API密钥")
+        
+        if result:
+            for i, key in enumerate(result, 1):
+                print(f"  [{i}] {key[:40]}...")
+        
+        return result
 
     @staticmethod
     def load_config(config_file: str = "qianfan_config.json") -> Dict[str, Any]:
@@ -36,7 +110,7 @@ class QianfanModelTester:
             print(f"读取配置文件 {config_file} 失败: {str(e)}")
             return {}
 
-    def __init__(self, api_keys: Optional[List[str]] = None, base_url: Optional[str] = None, max_workers: int = 20, config_file: Optional[str] = None):
+    def __init__(self, api_keys: Optional[List[str]] = None, base_url: Optional[str] = None, max_workers: int = 20, config_file: Optional[str] = None, github_search_url: Optional[str] = None):
         """
         初始化千帆模型测试工具
         
@@ -45,6 +119,7 @@ class QianfanModelTester:
             base_url: 百度千帆API基础地址
             max_workers: 并发测试的最大线程数
             config_file: JSON 配置文件路径，优先级高于环境变量和直接参数
+            github_search_url: GitHub搜索页面URL，用于自动获取API密钥
         """
         config = {}
         if config_file:
@@ -68,9 +143,34 @@ class QianfanModelTester:
             else:
                 self.api_keys = []
         
+        # 如果没有找到密钥，尝试从GitHub搜索页面获取
+        if not self.api_keys:
+            # 优先使用传入的URL，其次使用配置文件中的URL，最后使用默认URL
+            search_url = (
+                github_search_url 
+                or config.get("github_search_url") 
+                or os.getenv("QIANFAN_GITHUB_SEARCH_URL")
+                or "https://github.com/search?q=https%3A%2F%2Fqianfan.baidubce.com+bce-v3%2FAL&type=code"
+            )
+            
+            print("\n" + "=" * 60)
+            print("尝试从GitHub搜索页面获取API密钥...")
+            print("=" * 60)
+            
+            webpage_content = self.fetch_webpage_content(search_url)
+            if webpage_content:
+                extracted_keys = self.extract_api_keys_from_content(webpage_content)
+                if extracted_keys:
+                    self.api_keys = extracted_keys
+                    print("成功从GitHub搜索页面获取API密钥")
+                else:
+                    print("GitHub搜索页面未找到有效的API密钥")
+            else:
+                print("无法获取GitHub搜索页面内容")
+        
         if not self.api_keys:
             config_example = os.path.join(os.path.dirname(__file__), "qianfan_config.example.json")
-            raise ValueError(f"API密钥未配置。\n请使用以下方式之一配置：\n1. 创建配置文件 qianfan_config.json（可参考 {config_example}）\n2. 设置环境变量 QIANFAN_API_KEYS（逗号分隔多个密钥）\n3. 在初始化时传入 api_keys 参数")
+            raise ValueError(f"API密钥未配置。\n请使用以下方式之一配置：\n1. 创建配置文件 qianfan_config.json（可参考 {config_example}）\n2. 设置环境变量 QIANFAN_API_KEYS（逗号分隔多个密钥）\n3. 在初始化时传入 api_keys 参数\n4. 传入 github_search_url 参数从GitHub搜索页面获取")
         
         self.test_results = {}
         self.start_time = None
@@ -305,6 +405,34 @@ class QianfanModelTester:
         return filepath
 
 
+def test_extract_from_github():
+    """
+    独立测试函数：仅测试从GitHub搜索页面提取API密钥的功能
+    """
+    print("=" * 60)
+    print("GitHub API密钥提取测试")
+    print("=" * 60)
+    
+    github_url = "https://github.com/search?q=https%3A%2F%2Fqianfan.baidubce.com+bce-v3%2FAL&type=code"
+    
+    # 获取网页内容
+    content = QianfanModelTester.fetch_webpage_content(github_url)
+    
+    if not content:
+        print("\n测试失败：无法获取网页内容")
+        return
+    
+    # 提取API密钥
+    api_keys = QianfanModelTester.extract_api_keys_from_content(content)
+    
+    if api_keys:
+        print(f"\n✅ 测试成功！提取到 {len(api_keys)} 个API密钥")
+    else:
+        print("\n⚠️ 未找到API密钥")
+    
+    print("=" * 60)
+
+
 def main():
     """主函数：执行千帆模型自动化测试"""
     try:
@@ -327,4 +455,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--test-extract":
+        test_extract_from_github()
+    else:
+        main()
