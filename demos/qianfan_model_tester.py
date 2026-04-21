@@ -243,7 +243,7 @@ class QianfanModelTester:
         return overall_summary
 
     def generate_markdown_report(self, overall_summary: Dict[str, Any]) -> str:
-        """生成Markdown格式的测试报告"""
+        """生成Markdown格式的测试报告 - 以模型为行，API密钥为列"""
         report_lines = []
         report_lines.append("# 千帆模型自动化测试报告\n")
         report_lines.append(f"**测试时间**: {overall_summary['timestamp']}\n")
@@ -251,52 +251,44 @@ class QianfanModelTester:
         report_lines.append(f"**API密钥数量**: {overall_summary['api_keys_count']}\n")
         report_lines.append(f"**环境信息**: Windows / Python 3\n\n")
 
+        model_key_map = {}
+        api_key_ids = list(overall_summary["keys_results"].keys())
+
         for api_key_id, key_result in overall_summary["keys_results"].items():
-            report_lines.append(f"---\n\n")
-            report_lines.append(f"## API密钥: {api_key_id}\n")
-            report_lines.append(f"**密钥显示**: {key_result['api_key_display']}\n\n")
-            
-            report_lines.append(f"### 1. 模型列表获取状态\n")
-            report_lines.append(f"- **状态**: {key_result['model_list_status']}\n")
-            report_lines.append(f"- **模型总数**: {key_result['summary']['total_models']}\n\n")
+            for test_result in key_result["test_results"]:
+                model_name = test_result["model_name"]
+                if model_name not in model_key_map:
+                    model_key_map[model_name] = {}
+                model_key_map[model_name][api_key_id] = test_result["test_result"]
 
-            if key_result['summary']['total_models'] > 0:
-                report_lines.append(f"### 2. 总体测试统计\n")
-                report_lines.append("| 指标 | 数值 |")
-                report_lines.append("|------|------|")
-                report_lines.append(f"| 测试总数 | {key_result['summary']['total_models']} |")
-                report_lines.append(f"| 通过 | {key_result['summary']['passed']} |")
-                report_lines.append(f"| 失败 | {key_result['summary']['failed']} |")
-                report_lines.append(f"| 超时 | {key_result['summary']['timeout']} |")
-                report_lines.append(f"| 通过率 | {round(key_result['summary']['passed'] / key_result['summary']['total_models'] * 100, 2)}% |\n")
+        sorted_model_names = sorted(model_key_map.keys())
 
-                report_lines.append(f"\n### 3. 异常汇总\n")
-                if key_result["summary"]["exceptions"]:
-                    for exc in key_result["summary"]["exceptions"]:
-                        report_lines.append(f"- **{exc['model']}**: {exc['error']}\n")
+        report_lines.append("## 模型-API密钥可用性矩阵\n")
+        header = "| 模型名称 | " + " | ".join(api_key_ids) + " |"
+        report_lines.append(header)
+        separator = "|----------|" + "|".join(["----------" for _ in api_key_ids]) + "|"
+        report_lines.append(separator)
+
+        for model_name in sorted_model_names:
+            row = [model_name]
+            for api_key_id in api_key_ids:
+                result = model_key_map[model_name].get(api_key_id, "-")
+                if result == "通过":
+                    row.append("✅")
+                elif result == "超时":
+                    row.append("⏱️")
+                elif result == "失败":
+                    row.append("❌")
                 else:
-                    report_lines.append("- 无异常\n")
+                    row.append("-")
+            report_lines.append("| " + " | ".join(row) + " |")
 
-                report_lines.append(f"\n### 4. 各模型测试详情\n")
-                report_lines.append("| 序号 | 模型名称 | 请求参数 | 响应状态码 | 响应时间(ms) | 测试结果 | 错误信息 |")
-                report_lines.append("|------|----------|----------|------------|--------------|----------|----------|")
-
-                for idx, result in enumerate(key_result["test_results"], 1):
-                    request_params_str = json.dumps(result['request_params'], ensure_ascii=False)[:50] + "..."
-                    error_msg = result['error_message'] or "-"
-                    status_code = result['response_status'] or "-"
-                    response_time = result['response_time'] or "-"
-                    
-                    if result['test_result'] == "通过":
-                        test_result_symbol = "✅ 通过"
-                    elif result['test_result'] == "超时":
-                        test_result_symbol = "⏱️ 超时"
-                    else:
-                        test_result_symbol = "❌ 失败"
-                    
-                    report_lines.append(f"| {idx} | {result['model_name']} | {request_params_str} | {status_code} | {response_time} | {test_result_symbol} | {error_msg} |")
-                
-                report_lines.append("\n")
+        report_lines.append("\n")
+        report_lines.append("**说明**：\n")
+        report_lines.append("- ✅: 测试通过\n")
+        report_lines.append("- ⏱️: 测试超时\n")
+        report_lines.append("- ❌: 测试失败\n")
+        report_lines.append("- -: 未测试\n")
 
         return "\n".join(report_lines)
 
