@@ -343,7 +343,7 @@ class QianfanModelTester:
         return overall_summary
 
     def generate_markdown_report(self, overall_summary: Dict[str, Any]) -> str:
-        """生成Markdown格式的测试报告 - 以模型为行，API密钥为列"""
+        """生成Markdown格式的测试报告 - 以模型为行，API密钥为列，每表最多10列"""
         report_lines = []
         report_lines.append("# 千帆模型自动化测试报告\n")
         report_lines.append(f"**测试时间**: {overall_summary['timestamp']}\n")
@@ -363,25 +363,39 @@ class QianfanModelTester:
 
         sorted_model_names = sorted(model_key_map.keys())
 
-        report_lines.append("## 模型-API密钥可用性矩阵\n")
-        header = "| 模型名称 | " + " | ".join(api_key_ids) + " |"
-        report_lines.append(header)
-        separator = "|----------|" + "|".join(["----------" for _ in api_key_ids]) + "|"
-        report_lines.append(separator)
+        # 每表最多 10 列（模型名称 + 9 个密钥）
+        max_columns_per_table = 10
+        num_api_keys = len(api_key_ids)
+        num_tables = (num_api_keys + max_columns_per_table - 2) // (max_columns_per_table - 1)
 
-        for model_name in sorted_model_names:
-            row = [model_name]
-            for api_key_id in api_key_ids:
-                result = model_key_map[model_name].get(api_key_id, "-")
-                if result == "通过":
-                    row.append("✅")
-                elif result == "超时":
-                    row.append("⏱️")
-                elif result == "失败":
-                    row.append("❌")
-                else:
-                    row.append("-")
-            report_lines.append("| " + " | ".join(row) + " |")
+        for table_idx in range(num_tables):
+            start_col = table_idx * (max_columns_per_table - 1)
+            end_col = min(start_col + (max_columns_per_table - 1), num_api_keys)
+            table_api_key_ids = api_key_ids[start_col:end_col]
+
+            if table_idx > 0:
+                report_lines.append("\n")
+            report_lines.append(f"## 模型-API密钥可用性矩阵 (第 {table_idx + 1} 部分)\n")
+            
+            header = "| 模型名称 | " + " | ".join(table_api_key_ids) + " |"
+            report_lines.append(header.rstrip())
+            separator = "|----------|" + "|".join(["----------" for _ in table_api_key_ids]) + "|"
+            report_lines.append(separator.rstrip())
+
+            for model_name in sorted_model_names:
+                row = [model_name]
+                for api_key_id in table_api_key_ids:
+                    result = model_key_map[model_name].get(api_key_id, "-")
+                    if result == "通过":
+                        row.append("✅")
+                    elif result == "超时":
+                        row.append("⏱️")
+                    elif result == "失败":
+                        row.append("❌")
+                    else:
+                        row.append("-")
+                report_line = "| " + " | ".join(row) + " |"
+                report_lines.append(report_line.rstrip())
 
         report_lines.append("\n")
         report_lines.append("**说明**：\n")
