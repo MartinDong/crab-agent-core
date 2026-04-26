@@ -25,7 +25,11 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import add_messages
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(dotenv_path=os.path.join(PROJECT_ROOT, ".env"))
+
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "demos"))
 
 from skills import WeatherSkill
 from color_utils import (
@@ -39,8 +43,6 @@ from color_utils import (
     print_header,
     print_section
 )
-
-load_dotenv()
 
 
 class AgentState(TypedDict):

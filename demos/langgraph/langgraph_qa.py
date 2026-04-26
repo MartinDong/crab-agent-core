@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from typing import Annotated, TypedDict
 from langchain_openai import ChatOpenAI
@@ -6,7 +7,11 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
-load_dotenv()
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv(dotenv_path=os.path.join(PROJECT_ROOT, ".env"))
+
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "demos"))
 
 class State(TypedDict):
     """

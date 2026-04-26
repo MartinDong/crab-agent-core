@@ -1,10 +1,17 @@
 import os
 import sys
+import json
 from dotenv import load_dotenv
 
 # 确保能加载项目根目录的 .env
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 文件路径: e:\AiAgent\crab-agent-core\demos\hermes\hermes_agent_conversation.py
+# 需要两次 dirname() 才能到达项目根目录 e:\AiAgent\crab-agent-core
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(dotenv_path=os.path.join(PROJECT_ROOT, ".env"))
+
+# 将项目根目录和 demos 目录添加到 sys.path 以支持正确的模块导入
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "demos"))
 
 # 确保 hermes-agent 已安装
 try:
@@ -14,7 +21,7 @@ except ImportError:
     print("请先安装: pip install git+https://github.com/NousResearch/hermes-agent.git")
     sys.exit(1)
 
-from config import LLMConfig
+from qianfan.config import LLMConfig
 
 
 class HermesConversationAgent:
