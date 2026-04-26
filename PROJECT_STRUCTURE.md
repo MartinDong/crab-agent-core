@@ -10,10 +10,15 @@ crab-agent-core/
 │       └── weather-skill/    # 天气查询 Skill
 │           └── SKILL.md
 ├── demos/                    # 演示文件目录
-│   ├── langchain_qa.py       # LangChain 问答示例
-│   ├── langgraph_qa.py       # LangGraph 问答示例
-│   ├── langgraph_core_demo.py  # LangGraph 核心设计交互式演示
-│   └── langgraph_demo_demo.py # LangGraph 核心设计自动演示
+│   ├── config.py                 # 统一配置管理（读取 .env 中的 LLM 服务配置）
+│   ├── langchain_qa.py           # LangChain 问答示例
+│   ├── langgraph_qa.py           # LangGraph 问答示例
+│   ├── langgraph_core_demo.py    # LangGraph 核心设计交互式演示
+│   ├── langgraph_demo_demo.py    # LangGraph 核心设计自动演示
+│   ├── hermes_agent_basic.py      # Hermes Agent 基础 chat 用法
+│   ├── hermes_agent_conversation.py # Hermes Agent 多轮对话与完整控制
+│   ├── hermes_agent_tools.py      # Hermes Agent 工具集配置与批量处理
+│   └── hermes_agent_api.py        # Hermes Agent FastAPI 服务集成示例
 ├── skills/                   # 可复用 Skill 模块
 │   ├── __init__.py
 │   └── weather.py            # 天气查询 Skill
@@ -38,6 +43,12 @@ crab-agent-core/
   - 所有以 `_demo.py` 或 `_qa.py` 结尾的文件
   - 按功能分类存放
   - 命名清晰，明确展示功能
+
+**Hermes Agent 示例** (`hermes_agent_*.py`)
+- `hermes_agent_basic.py` - 基础使用，展示 `chat()` 方法快速获取回复
+- `hermes_agent_conversation.py` - 多轮对话，展示 `run_conversation()` 、历史记忆、轨迹保存
+- `hermes_agent_tools.py` - 工具集配置（enabled_toolsets / disabled_toolsets）与批量处理
+- `hermes_agent_api.py` - FastAPI 集成示例，展示如何在 Web 服务中嵌入 Hermes
 
 ### `skills/`
 - **用途**: 可复用的 Skill 模块
@@ -85,5 +96,14 @@ python demos/langgraph_core_demo.py
 
 # 运行测试
 python tests/test_skill.py
+
+# Hermes Agent 示例
+python demos/hermes_agent_basic.py         # 基础问答
+python demos/hermes_agent_conversation.py   # 多轮对话
+python demos/hermes_agent_tools.py          # 工具集与批量处理
+
+# Hermes Agent API 服务（需先安装 fastapi）
+pip install fastapi uvicorn
+uvicorn demos.hermes_agent_api:app --reload
 ```
 
